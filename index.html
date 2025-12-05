@@ -11,19 +11,40 @@
     <div class="quiz-container">
         <h1>HTML/CSS/JS Exam Practice Quiz</h1>
         
+        <!-- NEW SECTION: Question Navigation Grid -->
+        <div id="question-nav" class="question-nav">
+            <!-- Question number buttons injected here -->
+        </div>
+        
         <div id="question-area">
             <h2 id="question">Question Text Placeholder</h2>
             <div id="options-container" class="options-grid">
-                </div>
+                <!-- Options injected here -->
+            </div>
+            
+            <div id="detailed-feedback" class="hidden" aria-live="polite">
+                <!-- Dynamic content will be injected here by script.js -->
+            </div>
+
             <p id="feedback" class="feedback-text"></p>
         </div>
 
-        <button id="next-button" class="hidden">Next Question</button>
+        <!-- NEW SECTION: Control Bar -->
+        <div id="control-bar" class="control-bar">
+            <button id="prev-button" class="nav-button" disabled>Previous</button>
+            <button id="next-button" class="nav-button">Next</button>
+            <button id="submit-button" class="nav-button hidden">Submit Quiz</button>
+        </div>
         
         <div id="results" class="hidden">
             <h2>Quiz Complete!</h2>
-            <p>Your final score is: <span id="score-display">0</span> out of <span id="total-questions-display">75</span></p>
-            <button onclick="window.location.reload()">Start Over</button>
+            <div class="results-summary">
+                <p>Correct: <span id="correct-count" class="correct-text">0</span></p>
+                <p>Incorrect: <span id="incorrect-count" class="incorrect-text">0</span></p>
+                <p>Unanswered: <span id="unanswered-count" class="unanswered-text">0</span></p>
+                <p class="final-percentage">Final Score: <span id="percentage-display">0%</span></p>
+            </div>
+            <button onclick="window.location.reload()" class="restart-button">Start Over</button>
         </div>
 
     </div>
