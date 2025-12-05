@@ -381,98 +381,318 @@ const questions = [
 ];
 
 // =======================================================================
-// 2. QUIZ LOGIC (DO NOT MODIFY UNLESS YOU NEED CUSTOM FEATURES)
+// 2. QUIZ LOGIC
 // =======================================================================
 
-let currentQuestionIndex = 0;
-let score = 0;
-let answered = false;
+// State to track answers for all 75 questions
+const userAnswers = new Array(questions.length).fill(null).map(() => ({
+    selected: null,
+    isCorrect: null,
+    detailedFeedback: null // Stores the generated HTML feedback
+}));
 
+let currentQuestionIndex = 0;
+// We no longer track 'score' directly, it is derived from userAnswers
+// let score = 0; 
+let answered = false; // Used only to prevent double-clicking on the current question
+
+// DOM References
 const questionEl = document.getElementById('question');
 const optionsContainer = document.getElementById('options-container');
 const feedbackEl = document.getElementById('feedback');
+const prevButton = document.getElementById('prev-button'); // NEW
 const nextButton = document.getElementById('next-button');
+const submitButton = document.getElementById('submit-button'); // NEW
 const resultsEl = document.getElementById('results');
 const questionAreaEl = document.getElementById('question-area');
-const scoreDisplayEl = document.getElementById('score-display');
-const totalQuestionsDisplayEl = document.getElementById('total-questions-display');
+const detailedFeedbackEl = document.getElementById('detailed-feedback');
+const questionNavEl = document.getElementById('question-nav'); // NEW
 
-// Function to load the current question
+function renderQuestionNav() {
+    questionNavEl.innerHTML = '';
+    questions.forEach((q, index) => {
+        const button = document.createElement('button');
+        button.textContent = index + 1;
+        button.classList.add('nav-number-button');
+
+        const state = userAnswers[index];
+        
+        // Apply status class
+        if (state.selected !== null) {
+            button.classList.add('nav-answered');
+        }
+        if (state.isCorrect === true) {
+            button.classList.add('nav-correct');
+            button.classList.remove('nav-answered');
+        } else if (state.isCorrect === false) {
+            button.classList.add('nav-incorrect');
+            button.classList.remove('nav-answered');
+        }
+        
+        // Apply current question indicator
+        if (index === currentQuestionIndex) {
+            button.classList.add('nav-current');
+        }
+
+        button.addEventListener('click', () => goToQuestion(index));
+        questionNavEl.appendChild(button);
+    });
+}
+
+function updateNavButtons() {
+    // Previous Button logic
+    prevButton.disabled = currentQuestionIndex === 0;
+
+    // Next/Submit Button logic
+    if (currentQuestionIndex === questions.length - 1) {
+        nextButton.classList.add('hidden');
+        submitButton.classList.remove('hidden');
+    } else {
+        nextButton.classList.remove('hidden');
+        submitButton.classList.add('hidden');
+    }
+}
+
 function loadQuestion() {
+    // Reset temporary state and elements
     answered = false;
     feedbackEl.textContent = '';
-    nextButton.classList.add('hidden');
-    optionsContainer.innerHTML = ''; // Clear previous options
+    optionsContainer.innerHTML = ''; 
 
-    // Ensure total questions count is set correctly
-    totalQuestionsDisplayEl.textContent = questions.length;
-
-    if (currentQuestionIndex < questions.length) {
+    if (currentQuestionIndex >= 0 && currentQuestionIndex < questions.length) {
         const currentQ = questions[currentQuestionIndex];
-        questionEl.textContent = `${currentQuestionIndex + 1}. ${currentQ.question}`;
-
+        const currentState = userAnswers[currentQuestionIndex];
+        const questionNumber = currentQuestionIndex + 1;
+        
+        questionEl.textContent = `${questionNumber}. ${currentQ.question}`;
+        
+        // 1. Render Options
         currentQ.options.forEach(option => {
             const button = document.createElement('button');
             button.textContent = option;
             button.classList.add('option-button');
-            button.addEventListener('click', () => checkAnswer(option, currentQ.answer, button));
+
+            // 2. Restore previous selection/feedback if answered
+            if (currentState.selected !== null) {
+                // Restore classes on buttons
+                if (option === currentState.selected) {
+                    button.classList.add(currentState.isCorrect ? 'correct' : 'incorrect');
+                }
+                if (!currentState.isCorrect && option === currentQ.answer) {
+                    // Highlight the correct answer if the selected answer was wrong
+                    button.classList.add('correct');
+                }
+                
+                // Disable all buttons if answered
+                button.classList.add('disabled');
+                button.disabled = true;
+            } else {
+                // Attach event listener only if not yet answered
+                button.addEventListener('click', () => checkAnswer(option, currentQ.answer, button));
+            }
+            
             optionsContainer.appendChild(button);
         });
+
+        // 3. Restore Detailed Feedback Area
+        if (currentState.detailedFeedback) {
+            detailedFeedbackEl.innerHTML = currentState.detailedFeedback;
+            detailedFeedbackEl.classList.remove('hidden');
+        } else {
+            detailedFeedbackEl.classList.add('hidden');
+            detailedFeedbackEl.innerHTML = '';
+        }
+        
+        // 4. Update Navigation elements
+        renderQuestionNav();
+        updateNavButtons();
+
     } else {
+        // Should only happen if index is out of bounds (e.g., calling next when on the last question)
+        if (currentQuestionIndex >= questions.length) {
+             showResults();
+        }
+    }
+}
+
+function goToQuestion(index) {
+    if (index >= 0 && index < questions.length) {
+        currentQuestionIndex = index;
+        loadQuestion();
+    }
+}
+
+function prevQuestion() {
+    if (currentQuestionIndex > 0) {
+        currentQuestionIndex--;
+        loadQuestion();
+    }
+}
+
+function nextQuestion() {
+    if (currentQuestionIndex < questions.length - 1) {
+        currentQuestionIndex++;
+        loadQuestion();
+    } else if (currentQuestionIndex === questions.length - 1) {
         showResults();
     }
 }
 
-// Function to check the selected answer
-function checkAnswer(selectedOption, correctAnswer, clickedButton) {
-    if (answered) return; // Prevent double-clicking
 
+// Utility to escape HTML for display
+function escapeHtml(text) {
+    if (typeof text !== 'string') return text;
+    return text.replace(/&/g, "&amp;")
+               .replace(/</g, "&lt;")
+               .replace(/>/g, "&gt;")
+               .replace(/"/g, "&quot;")
+               .replace(/'/g, "&#039;");
+}
+
+function checkAnswer(selectedOption, correctAnswer, clickedButton) {
+    // 1. Prevent double-clicking
+    if (answered) return; 
     answered = true;
 
-    // Disable all options after selection
+    // 2. Disable buttons and update current state
     Array.from(optionsContainer.children).forEach(button => {
         button.classList.add('disabled');
-        // Keep event listeners but prevent action with the 'answered' flag
+        button.disabled = true; // Also disable for full protection on repeated loads
     });
-
-    if (selectedOption === correctAnswer) {
-        score++;
+    
+    // 3. Determine Correctness and update state
+    let isCorrect = (selectedOption === correctAnswer);
+    const currentState = userAnswers[currentQuestionIndex];
+    currentState.selected = selectedOption;
+    currentState.isCorrect = isCorrect;
+    
+    // 4. Highlight Buttons
+    if (isCorrect) {
         clickedButton.classList.add('correct');
-        feedbackEl.textContent = 'Correct! ✅';
     } else {
         clickedButton.classList.add('incorrect');
-        feedbackEl.textContent = `Incorrect. ❌ The correct answer was: ${correctAnswer}`;
-        
-        // Highlight the correct answer
+        // Highlight correct one
         Array.from(optionsContainer.children).forEach(button => {
             if (button.textContent === correctAnswer) {
                 button.classList.add('correct');
             }
         });
     }
+
+    // 5. Generate Detailed Feedback Components (Same logic as before)
+    // A. Detect if option is code-like
+    const codeIndicators = /[\{\}\[\]\(\)=<>]|var |let |const |func|console|return|;|=>/;
+    const isCode = codeIndicators.test(selectedOption);
+
+    // B. Console Output Simulation
+    let consoleOutput = "";
+    if (isCode) {
+        if(selectedOption.includes("log") || selectedOption.includes("print")) {
+            consoleOutput = "> (Simulated Output of statement)";
+        } else if (selectedOption.includes("=>") || selectedOption.includes("function")) {
+            consoleOutput = "> [Function]";
+        } else if (selectedOption.startsWith("[")) {
+            consoleOutput = `> (Array) ${selectedOption}`;
+        } else if (!isNaN(selectedOption)) {
+            consoleOutput = `> ${selectedOption}`;
+        } else {
+            consoleOutput = `> ${selectedOption} (Evaluated/Reference)`;
+        }
+    } else {
+        consoleOutput = `> "${selectedOption}" (String Literal / Concept)`;
+    }
+
+    // C. Render Preview
+    const renderPreview = isCode 
+        ? `<span style="font-family:monospace; color:#d63384;">${escapeHtml(selectedOption)}</span>` 
+        : `<span>${escapeHtml(selectedOption)}</span>`;
+
+    // D. Explanation Text
+    const statusText = isCorrect ? "Correct" : "Incorrect";
+    const statusColor = isCorrect ? "green" : "red";
+    const explanation = isCorrect 
+        ? `Excellent choice. The option <strong>${escapeHtml(selectedOption)}</strong> satisfies the condition asked in the question.`
+        : `You selected <strong>${escapeHtml(selectedOption)}</strong>. This is incorrect in this context.`;
     
-    // Show the next button
-    nextButton.classList.remove('hidden');
+    const correctNote = isCorrect 
+        ? "" 
+        : `The correct option is: <strong>${escapeHtml(correctAnswer)}</strong>`;
+
+    // 6. Construct HTML for Detailed Feedback
+    const detailedHTML = `
+        <h3 style="color:${statusColor}; margin-top:0;">${statusText} Selection</h3>
+        
+        <div class="feedback-grid">
+            
+            <!-- Code Block -->
+            <div>
+                <span class="feedback-label">Code / Option Value</span>
+                <div class="code-snippet">${escapeHtml(selectedOption)}</div>
+            </div>
+
+            <!-- Console Output -->
+            <div>
+                <span class="feedback-label">Simulated Console Output</span>
+                <div class="console-output">${escapeHtml(consoleOutput)}</div>
+            </div>
+
+            <!-- Render Preview -->
+            <div>
+                <span class="feedback-label">Visual Representation</span>
+                <div class="render-preview">${renderPreview}</div>
+            </div>
+
+        </div>
+
+        <div class="explanation-block">
+            <p>${explanation}</p>
+            <p>${correctNote}</p>
+        </div>
+    `;
+
+    // 7. Inject and Store
+    detailedFeedbackEl.innerHTML = detailedHTML;
+    detailedFeedbackEl.classList.remove('hidden');
+    currentState.detailedFeedback = detailedHTML; // Store for later recall
+
+    // 8. Update Nav (Now that state has changed)
+    renderQuestionNav();
 }
 
-// Function to move to the next question
-function nextQuestion() {
-    currentQuestionIndex++;
-    loadQuestion();
-}
-
-// Function to show the final results
 function showResults() {
+    // 1. Hide quiz area and show results area
     questionAreaEl.classList.add('hidden');
-    nextButton.classList.add('hidden');
+    document.getElementById('control-bar').classList.add('hidden');
+    questionNavEl.classList.add('hidden');
     resultsEl.classList.remove('hidden');
 
-    // Update the final score
-    scoreDisplayEl.textContent = score;
+    // 2. Calculate final counts
+    let correctCount = 0;
+    let incorrectCount = 0;
+    
+    userAnswers.forEach(answer => {
+        if (answer.isCorrect === true) {
+            correctCount++;
+        } else if (answer.isCorrect === false) {
+            incorrectCount++;
+        }
+    });
+
+    const totalQuestions = questions.length;
+    const unansweredCount = totalQuestions - correctCount - incorrectCount;
+    const percentage = ((correctCount / totalQuestions) * 100).toFixed(1);
+
+    // 3. Update result display
+    document.getElementById('correct-count').textContent = correctCount;
+    document.getElementById('incorrect-count').textContent = incorrectCount;
+    document.getElementById('unanswered-count').textContent = unansweredCount;
+    document.getElementById('percentage-display').textContent = `${percentage}%`;
 }
 
-// Event listener for the Next button
+// Event Listeners for Navigation Buttons
+prevButton.addEventListener('click', prevQuestion);
 nextButton.addEventListener('click', nextQuestion);
+submitButton.addEventListener('click', showResults);
 
 // Initial call to start the quiz
 loadQuestion();
